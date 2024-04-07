@@ -69,6 +69,7 @@ class InferenceEndpointModel(LightevalModel):
             else:
                 self.endpoint: InferenceEndpoint = create_inference_endpoint(
                     name=config.name,
+                    namespace=config.namespace,
                     repository=config.repository,
                     revision=config.revision,
                     framework=config.framework,
