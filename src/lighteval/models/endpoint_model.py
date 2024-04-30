@@ -87,13 +87,13 @@ class InferenceEndpointModel(LightevalModel):
                         "health_route": "/health",
                         "env": {
                             # Documentaiton: https://huggingface.co/docs/text-generation-inference/en/basic_tutorials/launcher
-                            "MAX_BATCH_PREFILL_TOKENS": "2048",
-                            "MAX_INPUT_LENGTH": "2047",
-                            "MAX_TOTAL_TOKENS": "2048",
+                            "MAX_BATCH_PREFILL_TOKENS": "3072",
+                            "MAX_INPUT_LENGTH": "2560",
+                            "MAX_TOTAL_TOKENS": "3072",
                             "MODEL_ID": "/repository",
                             **config.get_dtype_args(),
                         },
-                        "url": "ghcr.io/huggingface/text-generation-inference:1.1.0",
+                        "url": "ghcr.io/huggingface/text-generation-inference:1.4.5",
                     },
                 )
             hlog("Deploying your endpoint. Please wait.")
