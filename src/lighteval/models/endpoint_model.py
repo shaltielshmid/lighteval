@@ -93,7 +93,7 @@ class InferenceEndpointModel(LightevalModel):
                             "MODEL_ID": "/repository",
                             **config.get_dtype_args(),
                         },
-                        "url": "ghcr.io/huggingface/text-generation-inference:1.4.5",
+                        "url": "ghcr.io/huggingface/text-generation-inference:2.0.3",
                     },
                 )
             hlog("Deploying your endpoint. Please wait.")
