@@ -87,9 +87,9 @@ class InferenceEndpointModel(LightevalModel):
                         "health_route": "/health",
                         "env": {
                             # Documentaiton: https://huggingface.co/docs/text-generation-inference/en/basic_tutorials/launcher
-                            "MAX_BATCH_PREFILL_TOKENS": "2560",
-                            "MAX_INPUT_LENGTH": "2560",
-                            "MAX_TOTAL_TOKENS": "3072",
+                            "MAX_BATCH_PREFILL_TOKENS": "3072",
+                            "MAX_INPUT_LENGTH": "3072",
+                            "MAX_TOTAL_TOKENS": "3584",
                             "MODEL_ID": "/repository",
                             **config.get_dtype_args(),
                         },
