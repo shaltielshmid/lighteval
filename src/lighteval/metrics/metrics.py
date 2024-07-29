@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+
 import numpy as np
 from aenum import Enum
 
@@ -61,6 +63,7 @@ from lighteval.metrics.sample_preparator import GenerativePreparator, Loglikelih
 from lighteval.metrics.utils import (
     CorpusLevelMetric,
     CorpusLevelMetricGrouping,
+    Metric,
     MetricCategory,
     MetricGrouping,
     MetricUseCase,
@@ -72,7 +75,7 @@ from lighteval.utils import as_list
 
 class Metrics(Enum):
     acc_golds_likelihood = SampleLevelMetric(  # todo: we need a better name for this!
-        metric="acc",
+        metric_name="acc",
         sample_level_fn=acc_golds_likelihood,
         category=MetricCategory.TARGET_PERPLEXITY,
         use_case=MetricUseCase.ACCURACY,
@@ -80,7 +83,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     bert_score = SampleLevelMetricGrouping(
-        metric=["BERTScore-P", "BERTScore-R", "BERTScore-F"],
+        metric_name=["BERTScore-P", "BERTScore-R", "BERTScore-F"],
         sample_level_fn=BertScore(normalize_gold=remove_braces, normalize_pred=remove_braces_and_strip).compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -88,7 +91,7 @@ class Metrics(Enum):
         higher_is_better={"BERTScore-P": True, "BERTScore-R": True, "BERTScore-F": True},
     )
     bits_per_byte = CorpusLevelMetric(
-        metric="bits_per_byte",
+        metric_name="bits_per_byte",
         sample_level_fn=PerplexityPreparator(units_type="bytes").prepare,
         category=MetricCategory.PERPLEXITY,
         use_case=MetricUseCase.PERPLEXITY,
@@ -96,7 +99,7 @@ class Metrics(Enum):
         higher_is_better=False,
     )
     bleu = CorpusLevelMetric(
-        metric="bleu",
+        metric_name="bleu",
         sample_level_fn=GenerativePreparator().prepare,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.TRANSLATION,
@@ -104,7 +107,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     bleu_1 = SampleLevelMetric(
-        metric="bleu_1",
+        metric_name="bleu_1",
         sample_level_fn=BLEU(n_gram=1).compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.TRANSLATION,
@@ -112,7 +115,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     bleu_4 = SampleLevelMetric(
-        metric="bleu_4",
+        metric_name="bleu_4",
         sample_level_fn=BLEU(n_gram=4).compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.TRANSLATION,
@@ -120,7 +123,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     bleurt = SampleLevelMetric(
-        metric="bleurt",
+        metric_name="bleurt",
         sample_level_fn=BLEURT.compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.TRANSLATION,
@@ -128,7 +131,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     byte_perplexity = CorpusLevelMetric(
-        metric="byte_perplexity",
+        metric_name="byte_perplexity",
         sample_level_fn=PerplexityPreparator(units_type="bytes").prepare,
         category=MetricCategory.PERPLEXITY,
         use_case=MetricUseCase.PERPLEXITY,
@@ -136,7 +139,7 @@ class Metrics(Enum):
         higher_is_better=False,
     )
     chrf = CorpusLevelMetric(
-        metric="chrf",
+        metric_name="chrf",
         sample_level_fn=GenerativePreparator().prepare,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.TRANSLATION,
@@ -144,7 +147,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     copyright = SampleLevelMetricGrouping(
-        metric=["longest_common_prefix_length", "edit_distance", "edit_similarity"],
+        metric_name=["longest_common_prefix_length", "edit_distance", "edit_similarity"],
         sample_level_fn=StringDistance(
             metric_types=["longest_common_prefix_length", "edit_distance", "edit_similarity"], strip_prediction=True
         ).compute,
@@ -154,7 +157,7 @@ class Metrics(Enum):
         higher_is_better={"longest_common_prefix_length": True, "edit_distance": False, "edit_similarity": True},
     )
     drop = SampleLevelMetricGrouping(
-        metric=["qem", "f1"],
+        metric_name=["qem", "f1"],
         sample_level_fn=drop_metrics,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -162,7 +165,7 @@ class Metrics(Enum):
         higher_is_better={"qem": True, "f1": True},
     )
     exact_match = SampleLevelMetric(
-        metric="em",
+        metric_name="em",
         sample_level_fn=ExactMatches(strip_strings=True).compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -170,7 +173,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     extractiveness = SampleLevelMetricGrouping(
-        metric=["summarization_coverage", "summarization_density", "summarization_compression"],
+        metric_name=["summarization_coverage", "summarization_density", "summarization_compression"],
         sample_level_fn=extractiveness,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -186,7 +189,7 @@ class Metrics(Enum):
         },
     )
     f1_score_quasi = SampleLevelMetric(
-        metric="f1_score_quasi",
+        metric_name="f1_score_quasi",
         sample_level_fn=F1_score(normalize_gold=helm_normalizer, normalize_pred=helm_normalizer).compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -194,7 +197,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     f1_score = SampleLevelMetric(
-        metric="f1",
+        metric_name="f1",
         sample_level_fn=F1_score().compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -202,7 +205,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     f1_score_macro = CorpusLevelMetric(
-        metric="f1",
+        metric_name="f1",
         sample_level_fn=GenerativePreparator().prepare,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -210,7 +213,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     f1_score_micro = CorpusLevelMetric(
-        metric="f1",
+        metric_name="f1",
         sample_level_fn=GenerativePreparator().prepare,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -218,21 +221,21 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     faithfulness = SampleLevelMetric(
-        metric="summac",
+        metric_name="summac",
         sample_level_fn=faithfulness,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
         corpus_level_fn=np.mean,
         higher_is_better=True,
     )
-    llm_judge_multi_turn = SampleLevelMetricGrouping(
-        metric=["single_turn", "multi_turn"],
+    llm_judge_multi_turn_openai = SampleLevelMetricGrouping(
+        metric_name=["single_turn", "multi_turn"],
         higher_is_better=True,
         category=MetricCategory.LLM_AS_JUDGE_MULTI_TURN,
         use_case=MetricUseCase.SUMMARIZATION,
         sample_level_fn=JudgeLLM(
             judge_model_name="gpt-3.5-turbo",
-            template_path="src/lighteval/tasks/extended/mt_bench/judge_prompts.jsonl",
+            template_path=os.path.join(os.path.dirname(__file__), "judge_prompts.jsonl"),
             multi_turn=True,
         ).compute,
         corpus_level_fn={
@@ -240,14 +243,14 @@ class Metrics(Enum):
             "multi_turn": np.mean,
         },
     )
-    llm_judge = SampleLevelMetricGrouping(
-        metric=["judge_score"],
+    llm_judge_openai = SampleLevelMetricGrouping(
+        metric_name=["judge_score"],
         higher_is_better=True,
         category=MetricCategory.LLM_AS_JUDGE,
         use_case=MetricUseCase.SUMMARIZATION,
         sample_level_fn=JudgeLLM(
             judge_model_name="gpt-3.5-turbo",
-            template_path="src/lighteval/tasks/extended/mt_bench/judge_prompts.jsonl",
+            template_path=os.path.join(os.path.dirname(__file__), "judge_prompts.jsonl"),
             multi_turn=False,
         ).compute,
         corpus_level_fn={
@@ -255,7 +258,7 @@ class Metrics(Enum):
         },
     )
     loglikelihood_acc = SampleLevelMetric(
-        metric="acc",
+        metric_name="acc",
         sample_level_fn=LoglikelihoodAcc().compute,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -263,7 +266,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     loglikelihood_acc_norm = SampleLevelMetric(
-        metric="acc_norm",
+        metric_name="acc_norm",
         sample_level_fn=LoglikelihoodAcc(length_normalization=True).compute,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -271,7 +274,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     loglikelihood_acc_norm_nospace = SampleLevelMetric(
-        metric="acc_norm",
+        metric_name="acc_norm",
         sample_level_fn=LoglikelihoodAcc(length_normalization=True, ignore_first_space=True).compute,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -279,7 +282,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     loglikelihood_acc_norm_single_token = SampleLevelMetric(
-        metric="acc_norm",
+        metric_name="acc_norm",
         sample_level_fn=LoglikelihoodAcc(length_normalization=True).compute,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
@@ -287,7 +290,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     loglikelihood_acc_single_token = SampleLevelMetric(
-        metric="acc",
+        metric_name="acc",
         sample_level_fn=LoglikelihoodAcc().compute,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
@@ -295,23 +298,23 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     loglikelihood_f1 = CorpusLevelMetric(
-        metric="loglikelihood_f1",
+        metric_name="loglikelihood_f1",
         sample_level_fn=LoglikelihoodPreparator().prepare,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
-        corpus_level_fn=CorpusLevelF1Score(None),
+        corpus_level_fn=CorpusLevelF1Score(None).compute,
         higher_is_better=True,
     )
     loglikelihood_f1_single_token = CorpusLevelMetric(
-        metric="loglikelihood_f1",
+        metric_name="loglikelihood_f1",
         sample_level_fn=LoglikelihoodPreparator(is_single_token=True).prepare,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
-        corpus_level_fn=CorpusLevelF1Score(None),
+        corpus_level_fn=CorpusLevelF1Score(None).compute,
         higher_is_better=True,
     )
     mcc = CorpusLevelMetric(
-        metric="mcc",
+        metric_name="mcc",
         sample_level_fn=LoglikelihoodPreparator().prepare,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -319,7 +322,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     mcc_single_token = CorpusLevelMetric(
-        metric="mcc",
+        metric_name="mcc",
         sample_level_fn=LoglikelihoodPreparator().prepare,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
@@ -327,7 +330,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     maj_at_4_math = SampleLevelMetric(
-        metric="maj@4",
+        metric_name="maj@4",
         sample_level_fn=MajAtK(
             k=4, strip_strings=True, normalize_pred=math_normalizer, normalize_gold=math_normalizer
         ).compute,
@@ -337,7 +340,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     maj_at_5 = SampleLevelMetric(
-        metric="maj@5",
+        metric_name="maj@5",
         sample_level_fn=MajAtK(k=5).compute,
         category=MetricCategory.GENERATIVE_SAMPLING,
         use_case=MetricUseCase.ACCURACY,
@@ -345,7 +348,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     maj_at_8 = SampleLevelMetric(
-        metric="maj@8",
+        metric_name="maj@8",
         sample_level_fn=MajAtK(k=8).compute,
         category=MetricCategory.GENERATIVE_SAMPLING,
         use_case=MetricUseCase.ACCURACY,
@@ -353,7 +356,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     maj_at_8_gsm8k = SampleLevelMetric(
-        metric="maj@8",
+        metric_name="maj@8",
         sample_level_fn=MajAtK(
             k=8, strip_strings=True, normalize_pred=gsm8k_normalizer, normalize_gold=gsm8k_normalizer
         ).compute,
@@ -363,7 +366,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     mrr = SampleLevelMetric(
-        metric="mrr",
+        metric_name="mrr",
         sample_level_fn=MRR().compute,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -371,7 +374,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     mrr_single_token = SampleLevelMetric(
-        metric="mrr",
+        metric_name="mrr",
         sample_level_fn=mrr,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
@@ -379,15 +382,15 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     multi_f1_numeric = CorpusLevelMetric(
-        metric="mf1",
+        metric_name="mf1",
         sample_level_fn=LoglikelihoodPreparator(is_single_token=True).prepare,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
-        corpus_level_fn=CorpusLevelF1Score(average=None, num_classes=3),
+        corpus_level_fn=CorpusLevelF1Score(average=None, num_classes=3).compute,
         higher_is_better=True,
     )
     perfect_exact_match = SampleLevelMetric(
-        metric="perfect_em",
+        metric_name="perfect_em",
         sample_level_fn=ExactMatches().compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -395,7 +398,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     prediction_perplexity = SampleLevelMetric(
-        metric="ppl",
+        metric_name="ppl",
         sample_level_fn=None,  # todo!!!
         category=MetricCategory.IGNORED,
         use_case=MetricUseCase.PERPLEXITY,
@@ -403,7 +406,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     prefix_exact_match = SampleLevelMetric(
-        metric="pem",
+        metric_name="pem",
         sample_level_fn=ExactMatches(strip_strings=True, type_exact_match="prefix").compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -411,7 +414,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     prefix_quasi_exact_match = SampleLevelMetric(
-        metric="pqem",
+        metric_name="pqem",
         sample_level_fn=ExactMatches(
             normalize_gold=helm_normalizer,
             normalize_pred=helm_normalizer,
@@ -423,7 +426,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     quasi_exact_match = SampleLevelMetric(
-        metric="qem",
+        metric_name="qem",
         sample_level_fn=ExactMatches(
             normalize_gold=helm_normalizer,
             normalize_pred=helm_normalizer,
@@ -435,7 +438,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     quasi_exact_match_math = SampleLevelMetric(
-        metric="qem",
+        metric_name="qem",
         sample_level_fn=ExactMatches(
             strip_strings=True, normalize_pred=math_normalizer, normalize_gold=math_normalizer
         ).compute,
@@ -445,7 +448,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     quasi_exact_match_triviaqa = SampleLevelMetric(
-        metric="qem",
+        metric_name="qem",
         sample_level_fn=ExactMatches(strip_strings=True, normalize_pred=harness_triviaqa_normalizer).compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.ACCURACY,
@@ -453,7 +456,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     quasi_exact_match_gsm8k = SampleLevelMetric(
-        metric="qem",
+        metric_name="qem",
         sample_level_fn=ExactMatches(
             strip_strings=True, normalize_pred=gsm8k_normalizer, normalize_gold=gsm8k_normalizer
         ).compute,
@@ -463,7 +466,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     recall_at_1_single_token = SampleLevelMetric(
-        metric="acc",
+        metric_name="acc",
         sample_level_fn=Recall(at=1).compute,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
@@ -471,7 +474,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     recall_at_2_single_token = SampleLevelMetric(
-        metric="recall@2",
+        metric_name="recall@2",
         sample_level_fn=Recall(at=2).compute,
         category=MetricCategory.MULTICHOICE_ONE_TOKEN,
         use_case=MetricUseCase.ACCURACY,
@@ -479,7 +482,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     recall_at_1 = SampleLevelMetric(
-        metric="acc",
+        metric_name="acc",
         sample_level_fn=Recall(at=1),
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -487,7 +490,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     recall_at_2 = SampleLevelMetric(
-        metric="recall@2",
+        metric_name="recall@2",
         sample_level_fn=Recall(at=2),
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -495,7 +498,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     rouge_t5 = CorpusLevelMetricGrouping(
-        metric=["rouge1", "rouge2", "rougeL", "rougeLsum"],
+        metric_name=["rouge1", "rouge2", "rougeL", "rougeLsum"],
         sample_level_fn=ROUGE(
             ["rouge1", "rouge2", "rougeL", "rougeLsum"],
             bootstrap=True,
@@ -508,7 +511,7 @@ class Metrics(Enum):
         higher_is_better={"rouge1": True, "rouge2": True, "rougeL": True, "rougeLsum": True},
     )
     rouge1 = SampleLevelMetric(
-        metric="rouge1",
+        metric_name="rouge1",
         sample_level_fn=ROUGE("rouge1").compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -516,7 +519,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     rouge2 = SampleLevelMetric(
-        metric="rouge2",
+        metric_name="rouge2",
         sample_level_fn=ROUGE("rouge2").compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -524,7 +527,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     rougeL = SampleLevelMetric(
-        metric="rougeL",
+        metric_name="rougeL",
         sample_level_fn=ROUGE("rougeL").compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -532,7 +535,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     rougeLsum = SampleLevelMetric(
-        metric="rougeLsum",
+        metric_name="rougeLsum",
         sample_level_fn=ROUGE("rougeLsum").compute,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -540,7 +543,7 @@ class Metrics(Enum):
         higher_is_better=True,
     )
     target_perplexity = SampleLevelMetric(
-        metric="ppl",
+        metric_name="ppl",
         sample_level_fn=PerplexityPreparator(units_type="words").prepare,
         category=MetricCategory.TARGET_PERPLEXITY,
         use_case=MetricUseCase.PERPLEXITY,
@@ -548,7 +551,7 @@ class Metrics(Enum):
         higher_is_better=False,
     )
     ter = CorpusLevelMetric(
-        metric="ter",
+        metric_name="ter",
         sample_level_fn=GenerativePreparator().prepare,
         category=MetricCategory.GENERATIVE,
         use_case=MetricUseCase.TRANSLATION,
@@ -556,7 +559,7 @@ class Metrics(Enum):
         higher_is_better=False,
     )
     truthfulqa_mc_metrics = SampleLevelMetricGrouping(
-        metric=["truthfulqa_mc1", "truthfulqa_mc2"],
+        metric_name=["truthfulqa_mc1", "truthfulqa_mc2"],
         sample_level_fn=truthfulqa_mc_metrics,
         category=MetricCategory.MULTICHOICE,
         use_case=MetricUseCase.ACCURACY,
@@ -564,7 +567,7 @@ class Metrics(Enum):
         higher_is_better={"truthfulqa_mc1": True, "truthfulqa_mc2": True},
     )
     word_perplexity = CorpusLevelMetric(
-        metric="word_perplexity",
+        metric_name="word_perplexity",
         sample_level_fn=PerplexityPreparator(units_type="words").prepare,
         category=MetricCategory.PERPLEXITY,
         use_case=MetricUseCase.SUMMARIZATION,
@@ -584,26 +587,24 @@ class Metrics(Enum):
             if isinstance(metric.value, MetricGrouping):
                 res.update(metric.value.higher_is_better)
             else:
-                res[metric.value.metric] = metric.value.higher_is_better
+                res[metric.value.metric_name] = metric.value.higher_is_better
         return res
 
     @staticmethod
-    def corpus_level_fns(metrics: list[str]) -> dict[str, callable]:
+    def corpus_level_fns(metrics: list[Metric]) -> dict[str, callable]:
         res = {}
-        for metric in Metrics:
-            if metric.name not in metrics:
+        for metric in metrics:
+            if metric.category == MetricCategory.IGNORED:
                 continue
-            if metric.value.category == MetricCategory.IGNORED:
-                continue
-            if isinstance(metric.value, MetricGrouping):
-                if isinstance(metric.value.corpus_level_fn, dict):
-                    res.update(metric.value.corpus_level_fn)
+            if isinstance(metric, MetricGrouping):
+                if isinstance(metric.corpus_level_fn, dict):
+                    res.update(metric.corpus_level_fn)
                 else:
                     # Must make sure there is a caching implementation here
-                    for m in metric.value.metric:
-                        res[m] = metric.value.corpus_level_fn
+                    for m in metric.metric_name:
+                        res[m] = metric.corpus_level_fn
             else:
-                res[metric.value.metric] = metric.value.corpus_level_fn
+                res[metric.metric_name] = metric.corpus_level_fn
         return res
 
     @staticmethod
@@ -612,5 +613,5 @@ class Metrics(Enum):
         for metric in Metrics:
             if metric.value.category == MetricCategory.IGNORED:
                 continue
-            res.extend(as_list(metric.value.metric))
+            res.extend(as_list(metric.value.metric_name))
         return res

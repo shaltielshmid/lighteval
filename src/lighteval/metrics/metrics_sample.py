@@ -424,9 +424,7 @@ class BertScore:
             normalize_pred (callable, optional): Function to use to normalize the predicted strings.
                 Defaults to None if no normalization is applied.
         """
-        self.bert_scorer = BERTScorer(
-            model_type="microsoft/deberta-large-mnli", lang="en", rescale_with_baseline=True, num_layers=9
-        )
+        self.bert_scorer = None
 
         self.normalize_gold = normalize_gold
         self.normalize_pred = normalize_pred
@@ -441,6 +439,12 @@ class BertScore:
         Returns:
             dict: Scores over the current sample's items.
         """
+        if self.bert_scorer is None:
+            hlog_warn("The first metric computation step might be a bit longer as we need to download the model.")
+            # We only initialize on first compute
+            self.bert_scorer = BERTScorer(
+                model_type="microsoft/deberta-large-mnli", lang="en", rescale_with_baseline=True, num_layers=9
+            )
         golds = as_list(golds)
         predictions = as_list(predictions)
         # Normalize
@@ -622,7 +626,7 @@ class StringDistance:
 
 
 class JudgeLLM:
-    available_models = ["gpt-3.5-turbo"]
+    available_models = ["gpt-3.5-turbo", "gpt-4o", "gpt-4-turbo", "gpt-4"]
 
     def __init__(self, judge_model_name: str, template_path: str, multi_turn: bool = False):
         if judge_model_name not in self.available_models:
@@ -631,24 +635,20 @@ class JudgeLLM:
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         self.multi_turn = multi_turn
 
-        try:
-            self.judge = JudgeOpenAI(
-                model=judge_model_name,
-                seed=42,
-                temperature=0.0,
-                templates_path=template_path,
-                openai_api_key=OPENAI_API_KEY,
-                multi_turn=multi_turn,
-            )
-        except Exception as e:
-            print(f"Could not initialize the JudgeOpenAI model:\n{e}")
-            self.judge = None
+        self.judge = JudgeOpenAI(
+            model=judge_model_name,
+            seed=42,
+            temperature=0.0,
+            templates_path=template_path,
+            openai_api_key=OPENAI_API_KEY,
+            multi_turn=multi_turn,
+        )
 
     def compute(self, predictions: list[str], formatted_doc: Doc, **kwargs) -> dict[str, float]:
         """
         Compute the score of a generative task using a llm as a judge.
         The generative task can be multiturn with 2 turns max, in that case, we
-        return scores for turn 1 and 2. Also returns user_prompt and judgment
+        return scores for turn 1 and 2. Also returns user_prompt and judgement
         which are ignored later by the aggregator.
         """
 
