@@ -119,7 +119,7 @@ class ModelClient(InferenceEndpointModel):
         # Todo: add an option to launch with conversational instead for chat prompts
         # We create a copy of the current text generation params
         generation_config: TextGenerationInputGenerateParameters = replace(
-            self.generation_config,
+            self.generation_config, 
             stop=stop_tokens,
             max_new_tokens=max_tokens,
             details=True,
