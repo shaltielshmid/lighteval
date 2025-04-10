@@ -67,6 +67,7 @@ class OpenAIModelConfig:
     generation_parameters: GenerationParameters = None
     base_url: str = "https://api.openai.com/v1"
     api_key: str = os.environ.get("OPENAI_API_KEY", None)
+    oai_model_key: str = None
 
     def __post_init__(self):
         if not self.generation_parameters:
@@ -104,6 +105,7 @@ class OpenAIClient(LightevalModel):
         self.API_RETRY_MULTIPLIER = 2
         self.CONCURENT_CALLS = 100
         self.model = config.model
+        self.oai_model_key = config.oai_model_key or config.model
         try:
             self._tokenizer = tiktoken.encoding_for_model(self.model)
         except KeyError:
@@ -115,7 +117,7 @@ class OpenAIClient(LightevalModel):
             try:
                 response_format = {"response_format": {"type": "text"}} if "openai" in self.config.base_url else {}
                 response = self.client.chat.completions.create(
-                    model=self.model,
+                    model=self.oai_model_key,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=max_new_tokens if max_new_tokens > 0 else None,
                     logprobs=return_logits,
