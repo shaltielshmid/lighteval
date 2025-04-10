@@ -122,9 +122,7 @@ class ModelClient(InferenceEndpointModel):
             self.generation_config, 
             stop=stop_tokens,
             max_new_tokens=max_tokens,
-            details=True,
-            decoder_input_details=True,
-            grammar=grammar,
+            grammar=grammar
         )
 
         generated_text = self.client.generate(prompt=context, **generation_config)
