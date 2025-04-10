@@ -68,6 +68,7 @@ class OpenAIModelConfig:
     base_url: str = "https://api.openai.com/v1"
     api_key: str = os.environ.get("OPENAI_API_KEY", None)
     oai_model_key: str = None
+    use_chat_template: bool = True
 
     def __post_init__(self):
         if not self.generation_parameters:
@@ -106,6 +107,7 @@ class OpenAIClient(LightevalModel):
         self.CONCURENT_CALLS = 100
         self.model = config.model
         self.oai_model_key = config.oai_model_key or config.model
+        self.use_chat_template = config.use_chat_template
         try:
             self._tokenizer = tiktoken.encoding_for_model(self.model)
         except KeyError:
@@ -116,16 +118,31 @@ class OpenAIClient(LightevalModel):
         for _ in range(self.API_MAX_RETRY):
             try:
                 response_format = {"response_format": {"type": "text"}} if "openai" in self.config.base_url else {}
-                response = self.client.chat.completions.create(
-                    model=self.oai_model_key,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=max_new_tokens if max_new_tokens > 0 else None,
-                    logprobs=return_logits,
-                    logit_bias=logit_bias,
-                    n=num_samples,
-                    **self.sampling_params,
-                    **response_format,
-                )
+                if self.use_chat_template:
+                    response = self.client.chat.completions.create(
+                        model=self.oai_model_key,
+                        messages=[{"role": "user", "content": prompt}],
+                        stream=False,
+                        max_tokens=max_new_tokens if max_new_tokens > 0 else None,
+                        logprobs=return_logits,
+                        logit_bias=logit_bias,
+                        n=num_samples,
+                        **self.sampling_params,
+                        **response_format,
+                    )
+                else:
+                    response = self.client.completions.create(
+                        model=self.oai_model_key,
+                        prompt=prompt,
+                        stream=False,
+                        max_tokens=max_new_tokens if max_new_tokens > 0 else None,
+                        logprobs=return_logits,
+                        logit_bias=logit_bias,
+                        n=num_samples,
+                        **self.sampling_params,
+                        **response_format,
+                    )
+
                 self.API_RETRY_SLEEP = 3
                 return response
             except Exception as e:
@@ -201,7 +218,7 @@ class OpenAIClient(LightevalModel):
             responses = self.__call_api_parallel(contexts, return_logits, max_new_tokens, num_samples)
 
             for response in responses:
-                result: list[str] = [output.message.content for output in response.choices]
+                result: list[str] = [output.message.content if self.use_chat_template else output.text for output in response.choices]
 
                 cur_response = GenerativeResponse(
                     result=result,
