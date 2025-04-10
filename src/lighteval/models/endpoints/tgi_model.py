@@ -120,12 +120,14 @@ class ModelClient(InferenceEndpointModel):
         # We create a copy of the current text generation params
         generation_config: TextGenerationInputGenerateParameters = replace(
             self.generation_config, 
-            stop=stop_tokens,
+            stop=None,
             max_new_tokens=max_tokens,
-            grammar=grammar
+            details=None,
+            decoder_input_details=True,
+            grammar=grammar,
         )
-
-        generated_text = self.client.generate(prompt=context, **generation_config)
+                
+        generated_text = self.client.generate(prompt=context, **{k:v for k,v in generation_config.items() if v is not None}, stop_sequences=stop_tokens)
 
         return generated_text
 
