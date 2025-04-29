@@ -115,7 +115,7 @@ class OpenAIClient(LightevalModel):
             self._tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.pairwise_tokenization = False
 
-    def __call_api(self, prompt, return_logits, max_new_tokens, num_samples, logit_bias, stop_sequences):
+    def __call_api(self, prompt, return_logits, max_new_tokens, num_samples, logit_bias, stop_sequence):
         for _ in range(self.API_MAX_RETRY):
             try:
                 response_format = {"response_format": {"type": "text"}} if "openai" in self.config.base_url else {}
@@ -128,6 +128,7 @@ class OpenAIClient(LightevalModel):
                         logprobs=return_logits,
                         logit_bias=logit_bias,
                         n=num_samples,
+                        stop=stop_sequence,
                         **self.sampling_params,
                         **response_format,
                     )
@@ -140,7 +141,7 @@ class OpenAIClient(LightevalModel):
                         logprobs=return_logits,
                         logit_bias=logit_bias,
                         n=num_samples,
-                        stop=stop_sequences,
+                        stop=stop_sequence,
                         **self.sampling_params,
                         **response_format,
                     )
@@ -160,7 +161,7 @@ class OpenAIClient(LightevalModel):
         max_new_tokens: int | list[int],
         num_samples: int | list[int],
         logit_bias: list[dict[int, float]] | None = None,
-        stop_sequences: Union[str, list[str]] | None = None,
+        stop_sequence: str | list[str] | None = None,
     ):
         results = []
 
@@ -168,6 +169,7 @@ class OpenAIClient(LightevalModel):
         max_new_tokenss = [max_new_tokens for _ in prompts] if not isinstance(max_new_tokens, list) else max_new_tokens
         num_sampless = [num_samples for _ in prompts] if not isinstance(num_samples, list) else num_samples
         logit_biass = [logit_bias for _ in prompts] if logit_bias is None else logit_bias
+        stop_sequences = [stop_sequence for _ in prompts] if stop_sequence else stop_sequence
 
         assert (
             len(prompts) == len(return_logitss) == len(max_new_tokenss) == len(num_sampless) == len(logit_biass)
@@ -216,10 +218,10 @@ class OpenAIClient(LightevalModel):
             max_new_tokens = dataset[0].generation_size  # could be none
             return_logits = dataset[0].use_logits
             num_samples = dataset[0].num_samples
-            stop_sequences = dataset[0].stop_sequences
+            stop_sequence = dataset[0].stop_sequence
             contexts = [c.context for c in dataset]
 
-            responses = self.__call_api_parallel(contexts, return_logits, max_new_tokens, num_samples, stop_sequences)
+            responses = self.__call_api_parallel(contexts, return_logits, max_new_tokens, num_samples, stop_sequence=stop_sequence)
 
             for response in responses:
                 result: list[str] = [output.message.content if self.use_chat_template else output.text for output in response.choices]
@@ -231,7 +233,7 @@ class OpenAIClient(LightevalModel):
                     input_tokens=[],
                 )
                 results.append(cur_response)
-
+        
         return dataset.get_original_order(results)
 
     @property
