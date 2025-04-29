@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from ctypes import Union
 import logging
 import os
 import time
@@ -114,7 +115,7 @@ class OpenAIClient(LightevalModel):
             self._tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.pairwise_tokenization = False
 
-    def __call_api(self, prompt, return_logits, max_new_tokens, num_samples, logit_bias):
+    def __call_api(self, prompt, return_logits, max_new_tokens, num_samples, logit_bias, stop_sequences):
         for _ in range(self.API_MAX_RETRY):
             try:
                 response_format = {"response_format": {"type": "text"}} if "openai" in self.config.base_url else {}
@@ -139,6 +140,7 @@ class OpenAIClient(LightevalModel):
                         logprobs=return_logits,
                         logit_bias=logit_bias,
                         n=num_samples,
+                        stop=stop_sequences,
                         **self.sampling_params,
                         **response_format,
                     )
@@ -158,6 +160,7 @@ class OpenAIClient(LightevalModel):
         max_new_tokens: int | list[int],
         num_samples: int | list[int],
         logit_bias: list[dict[int, float]] | None = None,
+        stop_sequences: Union[str, list[str]] | None = None,
     ):
         results = []
 
@@ -172,7 +175,7 @@ class OpenAIClient(LightevalModel):
 
         with ThreadPoolExecutor(self.CONCURENT_CALLS) as executor:
             for entry in tqdm(
-                executor.map(self.__call_api, prompts, return_logitss, max_new_tokenss, num_sampless, logit_biass),
+                executor.map(self.__call_api, prompts, return_logitss, max_new_tokenss, num_sampless, logit_biass, stop_sequences),
                 total=len(prompts),
             ):
                 results.append(entry)
@@ -213,9 +216,10 @@ class OpenAIClient(LightevalModel):
             max_new_tokens = dataset[0].generation_size  # could be none
             return_logits = dataset[0].use_logits
             num_samples = dataset[0].num_samples
+            stop_sequences = dataset[0].stop_sequences
             contexts = [c.context for c in dataset]
 
-            responses = self.__call_api_parallel(contexts, return_logits, max_new_tokens, num_samples)
+            responses = self.__call_api_parallel(contexts, return_logits, max_new_tokens, num_samples, stop_sequences)
 
             for response in responses:
                 result: list[str] = [output.message.content if self.use_chat_template else output.text for output in response.choices]
