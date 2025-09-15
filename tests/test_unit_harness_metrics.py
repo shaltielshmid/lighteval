@@ -37,7 +37,7 @@ from lighteval.tasks.requests import Doc
 from lighteval.utils.utils import as_list
 
 
-PATH_TO_HARNESS_METRICS = os.path.join(os.path.dirname(__file__), "reference_scores/harness_metrics.json")
+PATH_TO_HARNESS_METRICS = None# os.path.join(os.path.dirname(__file__), "reference_scores/harness_metrics.json")
 
 POSSIBLE_METRICS = Metrics.all_metrics()
 
