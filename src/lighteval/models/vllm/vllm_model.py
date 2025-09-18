@@ -188,9 +188,11 @@ class VLLMModel(LightevalModel):
             "swap_space": 4,
             "seed": int(config.seed),
             "max_num_seqs": int(config.max_num_seqs),
-            "max_num_batched_tokens": int(config.max_num_batched_tokens),
             "mamba_ssm_cache_dtype": "float32"
         }
+        if config.max_num_batched_tokens:
+            self.model_args["max_num_batched_tokens"] = int(config.max_num_batched_tokens)
+        
         if int(config.data_parallel_size) > 1:
             self.model_args["distributed_executor_backend"] = "ray"
             self._batch_size = "auto"
