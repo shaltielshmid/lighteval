@@ -189,6 +189,7 @@ class VLLMModel(LightevalModel):
             "seed": int(config.seed),
             "max_num_seqs": int(config.max_num_seqs),
             "max_num_batched_tokens": int(config.max_num_batched_tokens),
+            "mamba_ssm_cache_dtype": "float32"
         }
         if int(config.data_parallel_size) > 1:
             self.model_args["distributed_executor_backend"] = "ray"
