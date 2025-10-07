@@ -371,7 +371,7 @@ class VLLMModel(LightevalModel):
             ]
         else:
             outputs = self.model.generate(
-                prompt_token_ids=inputs,
+                TokensPrompt(prompt_token_ids=inputs),
                 sampling_params=sampling_params,
                 use_tqdm=True,
             )
