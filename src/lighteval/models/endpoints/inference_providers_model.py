@@ -22,71 +22,76 @@
 
 import asyncio
 import logging
-from dataclasses import field
 from typing import Any, List, Optional
 
-import yaml
 from huggingface_hub import AsyncInferenceClient, ChatCompletionOutput
-from pydantic import BaseModel, NonNegativeInt
+from huggingface_hub.errors import HfHubHTTPError
+from pydantic import NonNegativeInt
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as async_tqdm
 from transformers import AutoTokenizer
 
 from lighteval.data import GenerativeTaskDataset
-from lighteval.models.abstract_model import LightevalModel
-from lighteval.models.endpoints.endpoint_model import ModelInfo
-from lighteval.models.model_input import GenerationParameters
-from lighteval.models.model_output import (
-    GenerativeResponse,
-    LoglikelihoodResponse,
-    LoglikelihoodSingleTokenResponse,
-)
-from lighteval.tasks.requests import (
-    GreedyUntilRequest,
-    LoglikelihoodRequest,
-    LoglikelihoodRollingRequest,
-    LoglikelihoodSingleTokenRequest,
-)
+from lighteval.models.abstract_model import LightevalModel, ModelConfig
+from lighteval.models.model_output import ModelResponse
+from lighteval.tasks.prompt_manager import PromptManager
+from lighteval.tasks.requests import Doc, SamplingMethod
+from lighteval.utils.cache_management import SampleCache, cached
 
 
 logger = logging.getLogger(__name__)
 
 
-class InferenceProvidersModelConfig(BaseModel):
-    """Configuration for InferenceProvidersClient.
+class InferenceProvidersModelConfig(ModelConfig):
+    """Configuration class for HuggingFace's inference providers (like Together AI, Anyscale, etc.).
 
-    Args:
-        model: Name or path of the model to use
-        provider: Name of the inference provider
-        timeout: Request timeout in seconds
-        proxies: Proxy configuration for requests
-        generation_parameters: Parameters for text generation
+    inference providers doc: https://huggingface.co/docs/inference-providers/en/index
+
+    Attributes:
+        model_name (str):
+            Name or identifier of the model to use.
+        provider (str):
+            Name of the inference provider. Examples: "together", "anyscale", "runpod", etc.
+        timeout (int | None):
+            Request timeout in seconds. If None, uses provider default.
+        proxies (Any | None):
+            Proxy configuration for requests. Can be a dict or proxy URL string.
+        org_to_bill (str | None):
+            Organization to bill for API usage. If None, bills the user's account.
+        parallel_calls_count (NonNegativeInt):
+            Number of parallel API calls to make. Defaults to 10.
+            Higher values increase throughput but may hit rate limits.
+        generation_parameters (GenerationParameters, optional, defaults to empty GenerationParameters):
+            Configuration parameters that control text generation behavior, including
+            temperature, top_p, max_new_tokens, etc.
+        system_prompt (str | None, optional, defaults to None): Optional system prompt to be used with chat models.
+            This prompt sets the behavior and context for the model during evaluation.
+        cache_dir (str, optional, defaults to "~/.cache/huggingface/lighteval"): Directory to cache the model.
+
+    Example:
+        ```python
+        config = InferenceProvidersModelConfig(
+            model_name="deepseek-ai/DeepSeek-R1-0528",
+            provider="together",
+            parallel_calls_count=5,
+            generation_parameters=GenerationParameters(
+                temperature=0.7,
+                max_new_tokens=100
+            )
+        )
+        ```
+
+    Note:
+        - Requires HF API keys to be set in environment variable
+        - Different providers have different rate limits and pricing
     """
 
-    model: str
+    model_name: str
     provider: str
     timeout: int | None = None
     proxies: Any | None = None
+    org_to_bill: str | None = None
     parallel_calls_count: NonNegativeInt = 10
-    generation_parameters: GenerationParameters = field(default_factory=GenerationParameters)
-
-    @classmethod
-    def from_path(cls, path):
-        with open(path, "r") as f:
-            config = yaml.safe_load(f)["model"]
-
-        model = config["model_name"]
-        provider = config.get("provider", None)
-        timeout = config.get("timeout", None)
-        proxies = config.get("proxies", None)
-        generation_parameters = GenerationParameters.from_dict(config)
-        return cls(
-            model=model,
-            provider=provider,
-            timeout=timeout,
-            proxies=proxies,
-            generation_parameters=generation_parameters,
-        )
 
 
 class InferenceProvidersClient(LightevalModel):
@@ -102,13 +107,8 @@ class InferenceProvidersClient(LightevalModel):
         Args:
             config: Configuration object containing model and provider settings
         """
-        self.model_info = ModelInfo(
-            model_name=config.model,
-            model_sha="",
-            model_dtype=None,
-            model_size="",
-        )
-        self.model = config.model
+        self.config = config
+        self.model_name = config.model_name
         self.provider = config.provider
         self.generation_parameters = config.generation_parameters
 
@@ -116,25 +116,26 @@ class InferenceProvidersClient(LightevalModel):
         self.API_RETRY_SLEEP = 3
         self.API_RETRY_MULTIPLIER = 2
         self.pairwise_tokenization = False
-        self.semaphore = asyncio.Semaphore(config.parallel_calls_count)  # Limit concurrent API calls
+        self.parallel_calls_count = config.parallel_calls_count
 
         self.client = AsyncInferenceClient(
             provider=self.provider,
             timeout=config.timeout,
             proxies=config.proxies,
+            bill_to=config.org_to_bill,
         )
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model)
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        except HfHubHTTPError:
+            logger.warning(f"Could not load model's tokenizer for the model {self.model_name}.")
+            self._tokenizer = None
 
-    def _encode(self, text: str) -> dict:
-        enc = self._tokenizer(text=text)
-        return enc
+        self.prompt_manager = PromptManager(
+            use_chat_template=True, tokenizer=self.tokenizer, system_prompt=config.system_prompt
+        )
 
-    def tok_encode(self, text: str | list[str]):
-        if isinstance(text, list):
-            toks = [self._encode(t["content"]) for t in text]
-            toks = [tok for tok in toks if tok]
-            return toks
-        return self._encode(text)
+        # Initialize cache for tokenization and predictions
+        self._cache = SampleCache(config)
 
     async def __call_api(self, prompt: List[dict], num_samples: int) -> Optional[ChatCompletionOutput]:
         """Make API call with exponential backoff retry logic.
@@ -149,11 +150,16 @@ class InferenceProvidersClient(LightevalModel):
         for attempt in range(self.API_MAX_RETRY):
             try:
                 kwargs = {
-                    "model": self.model,
+                    "model": self.model_name,
                     "messages": prompt,
                     "n": num_samples,
                 }
                 kwargs.update(self.generation_parameters.to_inference_providers_dict())
+                if kwargs.get("temperature") == 0.0 and num_samples > 1:
+                    raise ValueError(
+                        "Temperature is set to 0.0, but num_samples > 1. "
+                        "This is not supported by the inference providers API."
+                    )
                 response: ChatCompletionOutput = await self.client.chat.completions.create(**kwargs)
                 return response
             except Exception as e:
@@ -173,13 +179,16 @@ class InferenceProvidersClient(LightevalModel):
     ):
         results = []
 
+        # Initialize semaphore for the current event loop
+        semaphore = asyncio.Semaphore(self.parallel_calls_count)
+
         num_sampless = [num_samples for _ in prompts] if not isinstance(num_samples, list) else num_samples
-        assert len(prompts) == len(
-            num_sampless
-        ), f"Length of prompts and max_new_tokenss should be the same but are {len(prompts)}, {len(num_sampless)}"
+        assert len(prompts) == len(num_sampless), (
+            f"Length of prompts and max_new_tokenss should be the same but are {len(prompts)}, {len(num_sampless)}"
+        )
 
         async def bounded_api_call(prompt, num_samples):
-            async with self.semaphore:
+            async with semaphore:
                 return await self.__call_api(prompt, num_samples)
 
         tasks = [bounded_api_call(prompt, num_samples) for prompt, num_samples in zip(prompts, num_sampless)]
@@ -190,48 +199,41 @@ class InferenceProvidersClient(LightevalModel):
 
         return results
 
+    @cached(SamplingMethod.GENERATIVE)
     def greedy_until(
         self,
-        requests: list[GreedyUntilRequest],
-        override_bs: Optional[int] = None,
-    ) -> list[GenerativeResponse]:
-        """
-        Generates responses using a greedy decoding strategy until certain ending conditions are met.
+        docs: list[Doc],
+    ) -> list[ModelResponse]:
+        """Generates responses using a greedy decoding strategy until certain ending conditions are met.
 
         Args:
-            requests (list[Request]): list of requests containing the context and ending conditions.
-            override_bs (int, optional): Override the batch size for generation. Defaults to None.
+            docs (list[Doc]): List of documents containing the context for generation.
 
         Returns:
-            list[GenerativeResponse]: list of generated responses.
+            list[ModelResponse]: list of generated responses.
         """
-        for request in requests:
-            request.tokenized_context = self.tok_encode(request.context)
-
-        dataset = GenerativeTaskDataset(requests=requests, num_dataset_splits=self.DATASET_SPLITS)
+        dataset = GenerativeTaskDataset(requests=docs, num_dataset_splits=self.DATASET_SPLITS)
         results = []
 
-        for _ in tqdm(
-            dataset.splits_start_end_iterator(),
+        for split in tqdm(
+            dataset.splits_iterator(),
             total=dataset.num_dataset_splits,
             desc="Splits",
             position=0,
             disable=False,  # self.disable_tqdm,
         ):
-            contexts = [c.context for c in dataset]
-            num_samples = dataset[0].num_samples
+            contexts = [self.prompt_manager.prepare_prompt_api(doc) for doc in split]
+            num_samples = split[0].num_samples
 
             responses = asyncio.run(self.__call_api_parallel(contexts, num_samples))
 
-            for response in responses:
+            for response, context in zip(responses, contexts):
                 result: list[str] = [choice.message.content for choice in response.choices]
 
-                cur_response = GenerativeResponse(
+                cur_response = ModelResponse(
                     # In empty responses, the model should return an empty string instead of None
-                    result=result if result[0] else [""],
-                    logits=None,
-                    generated_tokens=[],
-                    input_tokens=[],
+                    text=result if result[0] else [""],
+                    input=context,
                 )
                 results.append(cur_response)
 
@@ -248,26 +250,20 @@ class InferenceProvidersClient(LightevalModel):
     @property
     def max_length(self) -> int:
         """Return the maximum sequence length of the model."""
-        return self._tokenizer.model_max_length
+        try:
+            return self._tokenizer.model_max_length
+        except AttributeError:
+            logger.warning("Tokenizer was not correctly loaded. Max model context length is assumed to be 30K tokens")
+            return 30000
 
-    def loglikelihood(
-        self, requests: list[LoglikelihoodRequest], override_bs: Optional[int] = None
-    ) -> list[LoglikelihoodResponse]:
+    @cached(SamplingMethod.LOGPROBS)
+    def loglikelihood(self, docs: list[Doc]) -> list[ModelResponse]:
         """Tokenize the context and continuation and compute the log likelihood of those
         tokenized sequences.
         """
         raise NotImplementedError
 
-    def loglikelihood_rolling(
-        self, requests: list[LoglikelihoodRollingRequest], override_bs: Optional[int] = None
-    ) -> list[LoglikelihoodResponse]:
+    @cached(SamplingMethod.PERPLEXITY)
+    def loglikelihood_rolling(self, docs: list[Doc]) -> list[ModelResponse]:
         """This function is used to compute the log likelihood of the context for perplexity metrics."""
-        raise NotImplementedError
-
-    def loglikelihood_single_token(
-        self, requests: list[LoglikelihoodSingleTokenRequest], override_bs: Optional[int] = None
-    ) -> list[LoglikelihoodSingleTokenResponse]:
-        """Tokenize the context and continuation and compute the log likelihood of those
-        tokenized sequences.
-        """
         raise NotImplementedError

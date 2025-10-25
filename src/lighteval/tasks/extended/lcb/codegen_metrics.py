@@ -53,7 +53,10 @@ import numpy as np
 from tqdm import tqdm
 
 
-sys.set_int_max_str_digits(50000)
+try:
+    sys.set_int_max_str_digits(50000)
+except AttributeError:
+    print("You likely won't be able to run codegen metrics on your system.")
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -71,7 +74,7 @@ class TimeoutException(Exception):
 
 
 def timeout_handler(signum, frame):
-    print("timeout occured: alarm went off")
+    print("timeout occurred: alarm went off")
     raise TimeoutException
 
 
@@ -180,7 +183,7 @@ def compile_code(code: str, timeout: int) -> ModuleType:
             # else condition allows future extensibility to other platforms
             compiled_sol = tmp_sol.Solution()
         else:
-            # do nothing in the other case since function is accesible
+            # do nothing in the other case since function is accessible
             compiled_sol = tmp_sol
 
         assert compiled_sol is not None
@@ -332,9 +335,9 @@ def grade_stdio(  # noqa: C901
             if stripped_prediction_line == stripped_gt_out_line:
                 continue
 
-            # CASE 2: element-wise comparision
+            # CASE 2: element-wise comparison
             # if there are floating elements
-            # use `decimal` library for good floating point comparision
+            # use `decimal` library for good floating point comparison
             # otherwise gotcha: np.isclose(50000000000000000, 50000000000000001) = True
             # note that we should always be able to convert to decimals
 
@@ -425,17 +428,16 @@ def run_test(sample: dict[str, str], test=None, timeout: int = 6) -> list[int | 
 
 
 def reliability_guard(maximum_memory_bytes: Optional[int] = None):
-    """
-    This disables various destructive functions and prevents the generated code
+    """This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,
     removing filesystem files, etc.)
-    WARNING
+
+    Warning:
     This function is NOT a security sandbox. Untrusted code, including, model-
     generated code, should not be blindly executed outside of one. See the
     Codex paper for more information about OpenAI's code sandbox, and proceed
     with caution.
     """
-
     if maximum_memory_bytes is not None:
         import resource
 
@@ -568,14 +570,15 @@ def evaluate_generations(
     and the run their corresponding unit tests which are retrieved from the APPS dataset.
 
     Args:
-        generations: list of code generations (same order as samples in APPS dataset)
-        level: difficulty level used in the generation, can be "all", "introductory", "interview" or "competition"
+        samples_list (list): List of sample problems from the APPS dataset.
+        generations_list (list[list[str]]): List of code generations for each sample.
+        num_process_evaluate (int): Number of processes to use for evaluation.
+        timeout (int): Timeout for each evaluation in seconds.
 
     Returns:
-        results: dictionary of results, key is the problem index, value is a list of results for each generation
+        dict[int, list[int | bool]]: Dictionary of results, key is the problem index, value is a list of results for each generation
         [-2] = compile error, [-1] = runtime error [False] = failed test case [True] = passed test case
     """
-
     # generations are code generations in the same order of the dataset
 
     inputs = [
