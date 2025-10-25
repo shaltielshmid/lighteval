@@ -54,6 +54,7 @@ if is_package_available("vllm"):
     )
     from vllm.transformers_utils.tokenizer import get_tokenizer
     from vllm.v1.engine.async_llm import AsyncEngineArgs, AsyncLLM
+    from vllm.inputs import TokensPrompt
 
     logging.getLogger("vllm").propagate = True
     logging.getLogger("vllm").handlers.clear()
