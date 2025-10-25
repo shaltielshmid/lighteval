@@ -336,7 +336,6 @@ class LiteLLMClient(LightevalModel):
 
         return fallback()
 
-    @cached(SamplingMethod.GENERATIVE)
     def greedy_until(
         self,
         docs: list[Doc],
@@ -376,7 +375,7 @@ class LiteLLMClient(LightevalModel):
                 result: list[str] = [choice.message.content if self.config.use_chat_template else choice.text for choice in response.choices]
                 reasonings: list[str | None] = [
                     getattr(choice.message, "reasoning_content", None) for choice in response.choices
-                ]
+                ] if self.config.use_chat_template else [None] * len(response.choices)
 
                 cur_response = ModelResponse(
                     # In empty responses, the model should return an empty string instead of None
@@ -415,14 +414,12 @@ class LiteLLMClient(LightevalModel):
 
         return max_tokens
 
-    @cached(SamplingMethod.LOGPROBS)
     def loglikelihood(self, docs: list[Doc]) -> list[ModelResponse]:
         """Tokenize the context and continuation and compute the log likelihood of those
         tokenized sequences.
         """
         raise NotImplementedError
 
-    @cached(SamplingMethod.PERPLEXITY)
     def loglikelihood_rolling(self, docs: list[Doc]) -> list[ModelResponse]:
         """This function is used to compute the log likelihood of the context for perplexity metrics."""
         raise NotImplementedError
