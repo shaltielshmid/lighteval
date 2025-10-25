@@ -309,7 +309,6 @@ class VLLMModel(LightevalModel):
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
 
-    @cached(SamplingMethod.GENERATIVE)
     def greedy_until(
         self,
         docs: list[Doc],
@@ -466,7 +465,6 @@ class VLLMModel(LightevalModel):
 
         return outputs
 
-    @cached(SamplingMethod.LOGPROBS)
     def loglikelihood(self, docs: list[Doc]) -> list[ModelResponse]:
         return self._loglikelihood_tokens(docs)
 
@@ -535,7 +533,6 @@ class VLLMModel(LightevalModel):
 
         return dataset.get_original_order(res)
 
-    @cached(SamplingMethod.PERPLEXITY)
     def loglikelihood_rolling(self, docs: list[Doc]) -> list[ModelResponse]:
         raise NotImplementedError()
 
@@ -631,7 +628,6 @@ class AsyncVLLMModel(VLLMModel):
         results = await asyncio.gather(*processed_requests)
         return results
 
-    @cached(SamplingMethod.GENERATIVE)
     async def greedy_until(
         self,
         docs: list[Doc],
@@ -665,7 +661,6 @@ class AsyncVLLMModel(VLLMModel):
 
         return results
 
-    @cached(SamplingMethod.LOGPROBS)
     async def loglikelihood(
         self,
         docs: list[Doc],
