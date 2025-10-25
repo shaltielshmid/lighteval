@@ -45,14 +45,14 @@ class PromptManager:
         self.tokenizer = tokenizer
         self.system_prompt = system_prompt  # System prompt to be used in chat templates
 
-    def prepare_prompt(self, doc: Doc) -> str:
+    def prepare_prompt(self, doc: Doc, tokenize: bool = True) -> str:
         """Prepare a prompt from a document, either using chat template or plain text format.
 
         Returns:
             str: The formatted prompt string
         """
         if self.use_chat_template:
-            return self._prepare_chat_template(doc)
+            return self._prepare_chat_template(doc, tokenize=tokenize)
         else:
             return self._prepare_plain_text(doc)
 

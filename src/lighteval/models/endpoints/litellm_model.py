@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 if is_package_available("litellm"):
     import litellm
+    litellm.suppress_debug_info = True
     from litellm import encode, supports_reasoning
     from litellm.caching.caching import Cache, LiteLLMCacheType
     from litellm.utils import ModelResponse as LitellmModelResponse
@@ -130,6 +131,7 @@ class LiteLLMModelConfig(ModelConfig):
     api_retry_sleep: float = 1.0
     api_retry_multiplier: float = 2.0
     timeout: float | None = None
+    use_chat_template: bool = False
 
 
 @requires("litellm")
@@ -159,7 +161,7 @@ class LiteLLMClient(LightevalModel):
         litellm.drop_params = True
         litellm.verbose = config.verbose
         self.prompt_manager = PromptManager(
-            use_chat_template=True, tokenizer=self.tokenizer, system_prompt=config.system_prompt
+            use_chat_template=self.config.use_chat_template, tokenizer=self.tokenizer, system_prompt=config.system_prompt
         )
 
         # Initialize cache for tokenization and predictions
@@ -200,8 +202,6 @@ class LiteLLMClient(LightevalModel):
         # Prepare kwargs for completion call
         kwargs = {
             "model": self.model,
-            "messages": prompt,
-            "response_format": {"type": "text"},
             "max_tokens": max_new_tokens,
             "logprobs": return_logits if self.provider == "openai" else None,
             "stop": stop_sequence,
@@ -210,8 +210,16 @@ class LiteLLMClient(LightevalModel):
             "n": num_samples,
             "caching": True,
             "timeout": self.timeout,
+            "custom_llm_provider": self.provider
         }
-
+        if self.config.use_chat_template:
+            kwargs["messages"] = prompt
+            kwargs["response_format"] = {"type": "text"}
+            func = litellm.completion
+        else:
+            kwargs["prompt"] = prompt
+            func = litellm.text_completion
+        
         if "o1" in self.model:
             logger.warning("O1 models do not support temperature, top_p, stop sequence. Disabling.")
         else:
@@ -222,18 +230,19 @@ class LiteLLMClient(LightevalModel):
 
         for attempt in range(self.API_MAX_RETRY):
             try:
-                response = litellm.completion(**kwargs)
-                content = response.choices[0].message.content
+                response = func(**kwargs)
+                content = response.choices[0].message.content if self.config.use_chat_template else response.choices[0].text
 
                 # If response is empty, retry without caching (maybe the error is recoverable and solved with a retry)
                 if not content:
                     logger.info("Response is empty, retrying without caching")
                     kwargs["caching"] = False
-                    response = litellm.completion(**kwargs)
-                    content = response.choices[0].message.content
+                    response = func(**kwargs)
+                    content = response.choices[0].message.content if self.config.use_chat_template else response.choices[0].text
 
                 return response
             except litellm.BadRequestError as e:
+                print(e)
                 if "message" in e.__dict__:
                     error_string = (
                         "The response was filtered due to the prompt triggering Microsoft's content management policy"
@@ -242,6 +251,9 @@ class LiteLLMClient(LightevalModel):
                         logger.warning(f"{error_string}. Returning empty response.")
                         return LitellmModelResponse()
             except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(e)
                 wait_time = min(
                     64, self.API_RETRY_SLEEP * (self.API_RETRY_MULTIPLIER**attempt)
                 )  # Exponential backoff with max 64s
@@ -249,7 +261,7 @@ class LiteLLMClient(LightevalModel):
                     f"Error in API call: {e}, waiting {wait_time} seconds before retry {attempt + 1}/{self.API_MAX_RETRY}"
                 )
                 time.sleep(wait_time)
-
+        exit(0)
         logger.error(f"API call failed after {self.API_MAX_RETRY} attempts, returning empty response.")
         return LitellmModelResponse()
 
@@ -347,7 +359,7 @@ class LiteLLMClient(LightevalModel):
             position=0,
             disable=self.disable_tqdm,
         ):
-            contexts = [self.prompt_manager.prepare_prompt_api(doc) for doc in dataset]
+            contexts = [self.prompt_manager.prepare_prompt(doc, tokenize=False) for doc in dataset]
             max_new_tokens = split[0].generation_size  # could be none
             return_logits = split[0].use_logits
             num_samples = split[0].num_samples
@@ -361,7 +373,7 @@ class LiteLLMClient(LightevalModel):
             responses = self.__call_api_parallel(contexts, return_logits, max_new_tokens, num_samples, stop_sequence)
 
             for response, context in zip(responses, contexts):
-                result: list[str] = [choice.message.content for choice in response.choices]
+                result: list[str] = [choice.message.content if self.config.use_chat_template else choice.text for choice in response.choices]
                 reasonings: list[str | None] = [
                     getattr(choice.message, "reasoning_content", None) for choice in response.choices
                 ]
