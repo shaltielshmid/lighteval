@@ -49,8 +49,6 @@ if is_package_available("litellm"):
 
     logging.getLogger("LiteLLM").setLevel(logging.WARNING)
     logging.getLogger("LiteLLM").handlers.clear()
-
-    litellm.cache = Cache(type=LiteLLMCacheType.DISK)
 else:
     from unittest.mock import Mock
 
