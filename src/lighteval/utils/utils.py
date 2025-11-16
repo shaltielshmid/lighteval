@@ -283,11 +283,14 @@ def remove_reasoning_tags(text: str, tag_pairs: list[tuple[str, str]]) -> str:
     This is useful for cleaning model outputs that contain reasoning sections
     that should be excluded from evaluation.
 
+    Special case: If start_tag is empty or None, takes everything after the end_tag.
+
     See: https://github.com/huggingface/lighteval/issues/790
 
     Args:
         text (str): The input text containing reasoning tags to remove.
         tag_pairs (list[tuple[str, str]]): List of (start_tag, end_tag) pairs to remove.
+            If start_tag is empty/None, takes everything after end_tag.
 
     Returns:
         str: The text with all reasoning tag content removed.
@@ -302,16 +305,27 @@ def remove_reasoning_tags(text: str, tag_pairs: list[tuple[str, str]]) -> str:
         >>> tag_pairs = [("<reasoning>", "</reasoning>")]
         >>> remove_reasoning_tags(text, tag_pairs)
         'Answer'
+
+        >>> text = "<think>reasoning</think> The answer is 42"
+        >>> tag_pairs = [("", "</think>")]
+        >>> remove_reasoning_tags(text, tag_pairs)
+        ' The answer is 42'
     """
     result = text
 
     for start_tag, end_tag in tag_pairs:
-        while start_tag in result and end_tag in result:
-            start = result.find(start_tag)
-            end = result.find(end_tag, start)
-            if start != -1 and end != -1:
-                result = result[:start] + result[end + len(end_tag) :]
-            else:
-                break
+        # Special case: if start_tag is empty/None, split by end_tag and take everything after
+        if not start_tag:
+            if end_tag in result:
+                result = result.split(end_tag, 1)[1]
+        else:
+            # Normal case: remove content between start_tag and end_tag
+            while start_tag in result and end_tag in result:
+                start = result.find(start_tag)
+                end = result.find(end_tag, start)
+                if start != -1 and end != -1:
+                    result = result[:start] + result[end + len(end_tag) :]
+                else:
+                    break
 
     return result
