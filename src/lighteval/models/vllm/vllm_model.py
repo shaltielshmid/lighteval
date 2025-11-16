@@ -138,6 +138,8 @@ class VLLMModelConfig(ModelConfig):
         system_prompt (str | None, optional, defaults to None): Optional system prompt to be used with chat models.
             This prompt sets the behavior and context for the model during evaluation.
         cache_dir (str, optional, defaults to "~/.cache/huggingface/lighteval"): Directory to cache the model.
+        vllm_kwargs (dict | None, optional, defaults to None): Additional keyword arguments to pass to vLLM initialization.
+            This can be used to pass arguments like reasoning_parser or other vLLM-specific options.
 
     Example:
         ```python
@@ -181,6 +183,7 @@ class VLLMModelConfig(ModelConfig):
     subfolder: str | None = None
     is_async: bool = False  # Whether to use the async version or sync version of the model
     override_chat_template: bool = None
+    vllm_kwargs: dict | None = None  # Additional kwargs to pass to vLLM initialization (e.g., reasoning_parser)
 
 
 @requires("vllm")
@@ -274,6 +277,10 @@ class VLLMModel(LightevalModel):
             self.model_args["quantization"] = config.quantization
         if config.load_format is not None:
             self.model_args["load_format"] = config.load_format
+
+        # Add any additional vllm kwargs
+        if config.vllm_kwargs is not None:
+            self.model_args.update(config.vllm_kwargs)
 
         if config.data_parallel_size > 1:
             self.model_args["distributed_executor_backend"] = "ray"
@@ -571,6 +578,10 @@ class AsyncVLLMModel(VLLMModel):
             "max_num_batched_tokens": int(config.max_num_batched_tokens),
             "enforce_eager": True,
         }
+
+        # Add any additional vllm kwargs
+        if config.vllm_kwargs is not None:
+            self.model_args.update(config.vllm_kwargs)
 
         if config.data_parallel_size > 1:
             self._batch_size = "auto"
