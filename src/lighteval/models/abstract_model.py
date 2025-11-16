@@ -133,8 +133,9 @@ class ModelConfig(BaseModel, extra="forbid"):
                 'model': {'model_name': 'gpt2', 'use_cache': True, 'generation_parameters': {'temperature': 0.7}},
             }
         """
-        # Looking for generation_parameters in the model_args
+        # Looking for generation_parameters and vllm_kwargs in the model_args
         generation_parameters_dict = None
+        vllm_kwargs_dict = None
         pattern = re.compile(r"(\w+)=(\{.*\}|[^,]+)")
         matches = pattern.findall(args)
         for key, value in matches:
@@ -145,12 +146,21 @@ class ModelConfig(BaseModel, extra="forbid"):
                 # for k, v where v are strings, we quote them too
                 gen_params = re.sub(r":\s*([A-Za-z_][\w.-]*)\s*(?=[,}])", r':"\1"', gen_params)
                 generation_parameters_dict = json.loads(gen_params)
+            elif key == "vllm_kwargs":
+                # Keys must be quoted (since they are strings)
+                vllm_params = re.sub(r"(\w+):", r'"\1":', value)
+                # for k, v where v are strings, we quote them too
+                vllm_params = re.sub(r":\s*([A-Za-z_][\w.-]*)\s*(?=[,}])", r':"\1"', vllm_params)
+                vllm_kwargs_dict = json.loads(vllm_params)
 
-        args = re.sub(r"generation_parameters=\{.*?\},?", "", args).strip(",")
+        args = re.sub(r"generation_parameters=\{.*?\},?", "", args)
+        args = re.sub(r"vllm_kwargs=\{.*?\},?", "", args).strip(",")
         model_config = {k.split("=")[0]: k.split("=")[1] if "=" in k else True for k in args.split(",")}
 
         if generation_parameters_dict is not None:
             model_config["generation_parameters"] = generation_parameters_dict
+        if vllm_kwargs_dict is not None:
+            model_config["vllm_kwargs"] = vllm_kwargs_dict
 
         return model_config
 
